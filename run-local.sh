@@ -1,7 +1,12 @@
 #!/bin/bash
-# export $(cat .env | xargs)
-# npx ts-node test.ts
-# npx ts-node --project backend/tsconfig.json backend/test.ts
+
+# Start postgres container if not running
+if [ "$(docker ps -q -f name=postgres-local)" = "" ]; then
+  echo "Starting postgres container..."
+  docker start postgres-local
+  sleep 2
+fi
+
 set -a
 source .env
 set +a
