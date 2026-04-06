@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { handler } from './functions/api';
 
 const event = {
@@ -11,7 +12,7 @@ const event = {
 } as any;
 
 async function run() {
-	require('dotenv').config();
+	// require('dotenv').config(); -- imported at the top to ensure it's loaded before accessing environment variables
 	const result = await handler(event);
 	console.log('Status:', result.statusCode);
 	console.log('Body:', JSON.parse(result.body as string));
