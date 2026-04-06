@@ -1,6 +1,18 @@
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { Pool, Client } from 'pg';
 
+// ─── State Abbreviations Map ───────────────────────────────────────────────
+// const stateMap = {
+//   'Victoria': 'VIC',
+//   'New South Wales': 'NSW',
+//   'Queensland': 'QLD',
+//   'Western Australia': 'WA',
+//   'South Australia': 'SA',
+//   'Tasmania': 'TAS',
+//   'Australian Capital Territory': 'ACT',
+//   'Northern Territory': 'NT'
+// };
+
 // ─── DB Pool ────────────────────────────────────────────────────────────────
 
 let pool: Pool | null = null;
@@ -163,6 +175,15 @@ export const handler = async (
       const mapped = data.features.map((f: any) => {
         const p = f.properties;
         const nameParts = [p.name, p.street, p.city, p.state].filter(Boolean);
+      //   const nameParts = [
+      //   p.housenumber, 
+      //   p.street, 
+      //   p.district?.toUpperCase(), 
+      //   // stateMap[p.state] || p.state, 
+      //   p.state?.toUpperCase(),
+      //   p.postcode
+      // ].filter(Boolean);
+
         const uniqueParts = [...new Set(nameParts)];
         return {
           display_name: uniqueParts.join(', '),
