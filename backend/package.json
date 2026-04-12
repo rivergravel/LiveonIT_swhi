@@ -4,7 +4,12 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "./build.sh",
+    "dev": "NODE_ENV=development ts-node -r dotenv/config src/server.ts",
+    "local:health": "curl http://localhost:4000/health",
+    "local:users": "curl http://localhost:4000/users",
+    "local:search": "curl 'http://localhost:4000/api/search?q=melbourne'"
   },
   "keywords": [],
   "author": "",
