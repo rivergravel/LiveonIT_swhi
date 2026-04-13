@@ -46,3 +46,4 @@ server.listen(PORT, () => {
   console.log(`Local backend running → http://localhost:${PORT}`);
   console.log(`Health check → http://localhost:${PORT}/health`);
 });
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
