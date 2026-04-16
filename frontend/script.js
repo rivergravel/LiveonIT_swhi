@@ -478,40 +478,92 @@ async function loadNearbyServices(lat, lon) {
     // Start the progress bar animation at the top of the map
     showProgress();
 
-    // To build the Overpass API query
-    // Nodes are points and ways are shapes of multiple points (needed for some train stations)
-    const query = `
-        [out:json];
-        (
-        node["shop"="supermarket"](around:800,${lat},${lon});
-        node["amenity"="pharmacy"](around:800,${lat},${lon});
-        node["amenity"="clinic"](around:800,${lat},${lon});
-        node["amenity"="doctors"](around:800,${lat},${lon});
-        node["highway"="bus_stop"](around:800,${lat},${lon});
-        node["railway"="station"](around:800,${lat},${lon});
-        way["railway"="station"](around:800,${lat},${lon}); 
-        node["amenity"="post_office"](around:800,${lat},${lon});
-        );
-        out body center;
-    `;
+    // // To build the Overpass API query
+    // // Nodes are points and ways are shapes of multiple points (needed for some train stations)
+    // const query = `
+    //     [out:json];
+    //     (
+    //     node["shop"="supermarket"](around:800,${lat},${lon});
+    //     node["amenity"="pharmacy"](around:800,${lat},${lon});
+    //     node["amenity"="clinic"](around:800,${lat},${lon});
+    //     node["amenity"="doctors"](around:800,${lat},${lon});
+    //     node["highway"="bus_stop"](around:800,${lat},${lon});
+    //     node["railway"="station"](around:800,${lat},${lon});
+    //     way["railway"="station"](around:800,${lat},${lon}); 
+    //     node["amenity"="post_office"](around:800,${lat},${lon});
+    //     );
+    //     out body center;
+    // `;
 
+    // try {
+    //     // Send the query to the Overpass API - queries OSM data
+    //     const res = await fetch('https://overpass-api.de/api/interpreter', {
+    //         method: 'POST',
+    //         body: query,
+    //         signal
+    //     });
+
+    //     // Parse the JSON response containing all matching places
+    //     const data = await res.json();
+    //     // Create a Turf.js point for the user's address — used to calculate straight-line distances to each service
+    //     const origin = turf.point([lon, lat]);
+
+    //     // Stores up to 3 candidates per category (w/ icons for categories), sorted by straight-line distance
+    //     // Walking routes are then fetched for all candidates and the fastest walk is chosen
+    //     const candidateServices = {
+    //         supermarket: {label: 'Supermarket', icon: '🛒', candidates: [] },
+    //         pharmacy: { label: 'Pharmacy', icon: '💊', candidates: [] },
+    //         clinic: { label: 'Health Clinic', icon: '🏥', candidates: [] },
+    //         bus_stop: { label: 'Bus Stop', icon: '🚌', candidates: [] },
+    //         train_station: { label: 'Train Station', icon: '🚆', candidates: [] },
+    //         post_office: { label: 'Post Office', icon: '📮', candidates: [] },
+    //     };
+
+    //     // Loop through every place that Overpass returned and sort it into the correct category bucket
+    //     data.elements.forEach((el) => {
+    //         // Get the coordinates — nodes have lat/lon directly
+    //         // Ways (polygons) store their center point in el.center instead
+    //         const elLat = el.lat ?? el.center?.lat;
+    //         const elLon = el.lon ?? el.center?.lon;
+    //         // Skip elements that somehow have no coordinates
+    //         if (!elLat || !elLon) return;
+
+    //         // Calculate straight-line distance from the user's address to this service using Turf.js
+    //         const point = turf.point([elLon, elLat]);
+    //         const distance = turf.distance(origin, point, { units: 'meters' });
+    //         // Some may still be further than the 800m radius
+    //         if (distance > 800) return;
+
+    //         // Figure out which category this place belongs to based on its OSM tags
+    //         let category = null;
+
+    //         if (el.tags?.shop === 'supermarket') category = 'supermarket';
+    //         else if (el.tags?.amenity === 'pharmacy') category = 'pharmacy';
+    //         else if (el.tags?.amenity === 'clinic' || el.tags?.amenity === 'doctors') category = 'clinic';
+    //         else if (el.tags?.highway === 'bus_stop') category = 'bus_stop';
+    //         else if (el.tags?.railway === 'station') category = 'train_station';
+    //         else if (el.tags?.amenity === 'post_office') category = 'post_office';
+
+    //          // If it doesn't match any category (shouldn't happen but just in case), skip
+    //         if (!category) return;
+
+    //         // Add this place to its category's candidate list along with its straight-line distance (used later for sorting and early-accept)
+    //         candidateServices[category].candidates.push({ el: { ...el, lat: elLat, lon: elLon }, straightLineDistance: distance });
+    //     });
+
+    // AWS Hosted PostGIS for OSM data
     try {
-        // Send the query to the Overpass API - queries OSM data
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
-            method: 'POST',
-            body: query,
-            signal
-        });
+        // Fetch nearby services from our own backend (backed by Aurora PostGIS)
+        const res = await fetch(`/api/nearby-services?lat=${lat}&lon=${lon}`, { signal });
+        const rows = await res.json();
 
-        // Parse the JSON response containing all matching places
-        const data = await res.json();
         // Create a Turf.js point for the user's address — used to calculate straight-line distances to each service
         const origin = turf.point([lon, lat]);
 
         // Stores up to 3 candidates per category (w/ icons for categories), sorted by straight-line distance
         // Walking routes are then fetched for all candidates and the fastest walk is chosen
         const candidateServices = {
-            supermarket: {label: 'Supermarket', icon: '🛒', candidates: [] },
+            supermarket: { label: 'Supermarket', icon: '🛒', candidates: [] },
             pharmacy: { label: 'Pharmacy', icon: '💊', candidates: [] },
             clinic: { label: 'Health Clinic', icon: '🏥', candidates: [] },
             bus_stop: { label: 'Bus Stop', icon: '🚌', candidates: [] },
@@ -519,36 +571,28 @@ async function loadNearbyServices(lat, lon) {
             post_office: { label: 'Post Office', icon: '📮', candidates: [] },
         };
 
-        // Loop through every place that Overpass returned and sort it into the correct category bucket
-        data.elements.forEach((el) => {
-            // Get the coordinates — nodes have lat/lon directly
-            // Ways (polygons) store their center point in el.center instead
-            const elLat = el.lat ?? el.center?.lat;
-            const elLon = el.lon ?? el.center?.lon;
-            // Skip elements that somehow have no coordinates
+        // Loop through every row returned from PostGIS and sort into category buckets
+        rows.forEach((row) => {
+            const elLat = row.lat;
+            const elLon = row.lon;
             if (!elLat || !elLon) return;
 
-            // Calculate straight-line distance from the user's address to this service using Turf.js
+            const category = row.category;
+            if (!category || !candidateServices[category]) return;
+
+            // Calculate straight-line distance using Turf.js (PostGIS already filters to 800m but we keep this for sorting)
             const point = turf.point([elLon, elLat]);
             const distance = turf.distance(origin, point, { units: 'meters' });
-            // Some may still be further than the 800m radius
-            if (distance > 800) return;
 
-            // Figure out which category this place belongs to based on its OSM tags
-            let category = null;
-
-            if (el.tags?.shop === 'supermarket') category = 'supermarket';
-            else if (el.tags?.amenity === 'pharmacy') category = 'pharmacy';
-            else if (el.tags?.amenity === 'clinic' || el.tags?.amenity === 'doctors') category = 'clinic';
-            else if (el.tags?.highway === 'bus_stop') category = 'bus_stop';
-            else if (el.tags?.railway === 'station') category = 'train_station';
-            else if (el.tags?.amenity === 'post_office') category = 'post_office';
-
-             // If it doesn't match any category (shouldn't happen but just in case), skip
-            if (!category) return;
-
-            // Add this place to its category's candidate list along with its straight-line distance (used later for sorting and early-accept)
-            candidateServices[category].candidates.push({ el: { ...el, lat: elLat, lon: elLon }, straightLineDistance: distance });
+            // Shape the row to match what the rest of the code expects
+            candidateServices[category].candidates.push({
+                el: {
+                    lat: elLat,
+                    lon: elLon,
+                    tags: { name: row.name }
+                },
+                straightLineDistance: distance
+            });
         });
 
         // Sort categories by candidate count ascending 

@@ -177,6 +177,77 @@ export const handler = async (
       };
     }
 
+    // ── GET /api/nearby-services ─────────────────────────────────────────────
+    if (routePath === '/api/nearby-services' && httpMethod === 'GET') {
+      const lat = parseFloat(event.queryStringParameters?.lat || '');
+      const lon = parseFloat(event.queryStringParameters?.lon || '');
+
+      if (isNaN(lat) || isNaN(lon)) {
+        return {
+          statusCode: 400,
+          headers: corsHeaders,
+          body: JSON.stringify({ error: 'Missing or invalid lat/lon params' }),
+        };
+      }
+
+      // OSM data lives in the postgres database, not app_db
+      const osmPool = new Pool({
+        host: process.env.DB_HOST,
+        port: Number(process.env.DB_PORT) || 5432,
+        database: 'postgres',
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        ssl: { rejectUnauthorized: false },
+        max: 1,
+        idleTimeoutMillis: 120000,
+        connectionTimeoutMillis: 5000,
+      });
+
+      try {
+        const result = await osmPool.query(`
+          SELECT
+            osm_id,
+            name,
+            CASE
+              WHEN shop = 'supermarket'            THEN 'supermarket'
+              WHEN amenity = 'pharmacy'            THEN 'pharmacy'
+              WHEN amenity IN ('clinic','doctors') THEN 'clinic'
+              WHEN highway = 'bus_stop'            THEN 'bus_stop'
+              WHEN railway = 'station'             THEN 'train_station'
+              WHEN amenity = 'post_office'         THEN 'post_office'
+            END AS category,
+            ST_X(ST_Transform(way, 4326)) AS lon,
+            ST_Y(ST_Transform(way, 4326)) AS lat
+          FROM planet_osm_point
+          WHERE ST_DWithin(
+            way::geography,
+            ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography,
+            800
+          )
+          AND (
+            shop = 'supermarket' OR
+            amenity IN ('pharmacy', 'clinic', 'doctors', 'post_office') OR
+            highway = 'bus_stop' OR
+            railway = 'station'
+          )
+          AND name IS NOT NULL
+          ORDER BY ST_Distance(
+            way::geography,
+            ST_SetSRID(ST_MakePoint($1, $2), 4326)::geography
+          )
+          LIMIT 30;
+        `, [lon, lat]);
+
+        return {
+          statusCode: 200,
+          headers: corsHeaders,
+          body: JSON.stringify(result.rows),
+        };
+      } finally {
+        await osmPool.end();
+      }
+    }
+
     // ── GET /users ───────────────────────────────────────────────────────────
     if (routePath === '/users' && httpMethod === 'GET') {
       const result = await pool.query(
